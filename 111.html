@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHUNITHM Score Merger (Web Edition)</title>
+    <style>
+        :root {
+            --bg-color: #222;
+            --fg-color: #eee;
+            --border-color: #555;
+            --input-bg: #333;
+            --button-bg: #007bff;
+            --button-hover-bg: #0056b3;
+            --button-success-bg: #28a745;
+            --button-success-hover-bg: #218838;
+            --label-color: #bbb;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--fg-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 720px;
+            background-color: #2a2a2a;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+
+        h1 {
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        fieldset {
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        legend {
+            padding: 0 10px;
+            font-weight: bold;
+            color: var(--label-color);
+        }
+        
+        .file-grid {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .file-grid label {
+            font-weight: 500;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        
+        .file-input-wrapper input[type="file"] {
+            display: none;
+        }
+
+        .file-input-wrapper .file-path-display {
+            width: 100%;
+            padding: 8px 10px;
+            background-color: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--fg-color);
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .browse-btn {
+            padding: 8px 16px;
+            background-color: var(--button-bg);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-weight: bold;
+        }
+
+        .browse-btn:hover {
+            background-color: var(--button-hover-bg);
+        }
+
+        .options-box {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        .checkbox-container input[type="checkbox"] {
+            width: 1.2em;
+            height: 1.2em;
+        }
+
+        #log-area {
+            width: 100%;
+            height: 250px;
+            box-sizing: border-box;
+            background-color: var(--input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--fg-color);
+            font-family: "Courier New", monospace;
+            font-size: 13px;
+            padding: 10px;
+            resize: vertical;
+        }
+
+        .bottom-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+        }
+
+        .credits {
+            font-size: 12px;
+            color: #888;
+        }
+
+        #merge-button {
+            padding: 10px 25px;
+            background-color: var(--button-success-bg);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+        #merge-button:hover {
+            background-color: var(--button-success-hover-bg);
+        }
+        
+        #merge-button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>CHUNITHM 分数合并工具</h1>
+
+        <fieldset>
+            <legend>文件选择</legend>
+            <div class="file-grid">
+                <label for="json-file-input">JSON 存档:</label>
+                <div class="file-input-wrapper">
+                    <div class="file-path-display" id="json-file-display">No file selected...</div>
+                </div>
+                <button class="browse-btn" onclick="document.getElementById('json-file-input').click();">浏览...</button>
+                <input type="file" id="json-file-input" accept=".json">
+
+                <label for="csv-file-input">CSV 档案:</label>
+                 <div class="file-input-wrapper">
+                    <div class="file-path-display" id="csv-file-display">No file selected...</div>
+                </div>
+                <button class="browse-btn" onclick="document.getElementById('csv-file-input').click();">浏览...</button>
+                <input type="file" id="csv-file-input" accept=".csv">
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>选项</legend>
+            <div class="options-box">
+                <label class="checkbox-container">
+                    <input type="checkbox" id="luminous-mode" checked>
+                    LMN-&gt;VERSE 兼容模式 (处理旧版CSV时勾选)
+                </label>
+                <label class="checkbox-container">
+                    <input type="checkbox" id="merge-fc-chain" checked>
+                    合并 Full Chain 等级
+                </label>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>日志</legend>
+            <textarea id="log-area" readonly></textarea>
+        </fieldset>
+
+        <div class="bottom-bar">
+            <span class="credits">Author: Google Gemini & Tesget | License: CC BY-NC-SA 4.0</span>
+            <button id="merge-button">开始合并</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Data Mappings (Ported from Python) ---
+        const RANK_MAP = {
+            'd': 0, 'c': 1, 'b': 2, 'bb': 3, 'bbb': 4, 'a': 5, 'aa': 6, 'aaa': 7,
+            's': 8, 'sp': 9, 'ss': 10, 'ssp': 11, 'sss': 12, 'sssp': 13
+        };
+        const LAMP_MAP_LMN_TO_VERSE = {
+            'failed': 0, 'clear': 1, 'hard': 2,
+            'absolute': 3, 'absolutep': 4, 'catastrophy': 6
+        };
+        const LAMP_MAP_VERSE_TO_VERSE = {
+            'failed': 0, 'clear': 1, 'hard': 2, 'brave': 3,
+            'absolute': 4, 'catastrophy': 6
+        };
+        const FULL_CHAIN_MAP = {
+            "fullchain": 1, "fullchain1": 1, "fullchain2": 2, "fullchain3": 3, "fullchain4": 4
+        };
+
+        // --- DOM Elements ---
+        const jsonFileInput = document.getElementById('json-file-input');
+        const csvFileInput = document.getElementById('csv-file-input');
+        const jsonFileDisplay = document.getElementById('json-file-display');
+        const csvFileDisplay = document.getElementById('csv-file-display');
+        const luminousModeCheckbox = document.getElementById('luminous-mode');
+        const mergeFcChainCheckbox = document.getElementById('merge-fc-chain');
+        const logArea = document.getElementById('log-area');
+        const mergeButton = document.getElementById('merge-button');
+
+        // --- Initial Log Message ---
+        function showInitialLog() {
+            const initialText = `[所需文件]
+  - JSON 存档: 一份从 RinNet 导出的 JSON 格式的 CHUNITHM 存档。
+               (需要基于 CHUNITHM VERSE 及更新的版本)
+  - CSV 档案: 一份从“落雪咖啡屋”导出的 CSV 格式分数列表。
+----------------------------------------------------
+请点击上方的“浏览...”按钮，分别选择您的存档和分数文件。
+默认已为您开启处理旧版CSV的兼容模式。`;
+            logArea.value = initialText;
+        }
+
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', showInitialLog);
+        
+        jsonFileInput.addEventListener('change', () => {
+            jsonFileDisplay.textContent = jsonFileInput.files.length > 0 ? jsonFileInput.files[0].name : 'No file selected...';
+        });
+
+        csvFileInput.addEventListener('change', () => {
+            csvFileDisplay.textContent = csvFileInput.files.length > 0 ? csvFileInput.files[0].name : 'No file selected...';
+        });
+
+        mergeButton.addEventListener('click', startMerge);
+
+        // --- Core Logic (Ported from Python) ---
+        function log(message) {
+            logArea.value += message + '\n';
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function parseCSV(csvText) {
+            const lines = csvText.trim().split(/\r?\n/);
+            if (lines.length < 2) return [];
+            
+            const headers = lines[0].split(',').map(h => h.trim());
+            const data = [];
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',');
+                const row = {};
+                headers.forEach((header, index) => {
+                    row[header] = values[index] ? values[index].trim() : '';
+                });
+                data.push(row);
+            }
+            return data;
+        }
+
+        function preprocessCsv(csvText, lampMap) {
+            log("\n步骤 1: 正在扫描 CSV 并构建最佳成就档案...");
+            const bestScores = new Map();
+            const reader = parseCSV(csvText);
+
+            for (const row of reader) {
+                try {
+                    const musicId = parseInt(row.id, 10);
+                    const levelIndex = parseInt(row.level_index, 10);
+                    
+                    if (isNaN(musicId) || isNaN(levelIndex)) continue;
+                    
+                    const recordKey = `${musicId},${levelIndex}`;
+
+                    const currentScore = parseInt(row.score, 10);
+                    const currentRank = row.rank?.trim() || '';
+                    
+                    const fcColStr = row.full_combo?.trim().toLowerCase() || '';
+                    const currentAjBool = fcColStr.includes('alljustice');
+                    const currentFcBool = !!fcColStr;
+                    
+                    const lampText = row.clear?.trim().toLowerCase() || '';
+                    const currentLampId = lampMap[lampText] !== undefined ? lampMap[lampText] : 0;
+                    
+                    const fcChainText = row.full_chain?.trim().toLowerCase() || '';
+                    const currentFcChainId = FULL_CHAIN_MAP[fcChainText] || 0;
+
+                    if (!bestScores.has(recordKey)) {
+                        bestScores.set(recordKey, {
+                            score: currentScore, rank: currentRank,
+                            ajBool: currentAjBool, fcBool: currentFcBool,
+                            lampId: currentLampId, fcChainId: currentFcChainId
+                        });
+                    } else {
+                        const entry = bestScores.get(recordKey);
+                        if (currentScore > entry.score) {
+                            entry.score = currentScore;
+                            entry.rank = currentRank;
+                        }
+                        if (currentAjBool) entry.ajBool = true;
+                        if (currentFcBool) entry.fcBool = true;
+                        if (currentLampId > entry.lampId) entry.lampId = currentLampId;
+                        if (currentFcChainId > entry.fcChainId) entry.fcChainId = currentFcChainId;
+                    }
+                } catch (e) {
+                    // Skip malformed rows
+                }
+            }
+            log(`  > 扫描完成！共构建了 ${bestScores.size} 条独立的最佳成就记录。`);
+            return bestScores;
+        }
+        
+        async function startMerge() {
+            const jsonFile = jsonFileInput.files[0];
+            const csvFile = csvFileInput.files[0];
+
+            if (!jsonFile || !csvFile) {
+                alert("错误: 请先选择 JSON 和 CSV 文件！");
+                return;
+            }
+
+            mergeButton.disabled = true;
+            logArea.value = '';
+
+            try {
+                const jsonText = await jsonFile.text();
+                const csvText = await csvFile.text();
+                runMerge(jsonText, jsonFile.name, csvText);
+            } catch (e) {
+                log(`  > 错误: 读取文件时发生错误: ${e.message}`);
+                mergeButton.disabled = false;
+            }
+        }
+
+        function runMerge(jsonText, jsonFileName, csvText) {
+            const useLuminousMode = luminousModeCheckbox.checked;
+            const activeLampMap = useLuminousMode ? LAMP_MAP_LMN_TO_VERSE : LAMP_MAP_VERSE_TO_VERSE;
+            
+            if (useLuminousMode) {
+                log("  > 兼容模式: 已启动 (旧版CSV -> 新版存档)");
+            } else {
+                log("  > 兼容模式: 已关闭 (新版CSV -> 新版存档)");
+            }
+
+            const bestCsvScores = preprocessCsv(csvText, activeLampMap);
+            if (bestCsvScores === null) {
+                log("合并失败: CSV 文件处理出错。");
+                mergeButton.disabled = false;
+                return;
+            }
+            
+            log("\n步骤 2: 正在读取 JSON 存档并准备合并...");
+            const baseName = jsonFileName.substring(0, jsonFileName.lastIndexOf('.'));
+            const outputFileName = `${baseName}_merged.json`;
+
+            let gameData;
+            try {
+                gameData = JSON.parse(jsonText);
+            } catch (e) {
+                log(`  > 错误: 读取 JSON 文件失败: ${e.message}`);
+                mergeButton.disabled = false;
+                return;
+            }
+
+            if (!gameData.userMusicDetailList) {
+                log("  > 错误: 无法在 JSON 存档中找到 'userMusicDetailList'。");
+                mergeButton.disabled = false;
+                return;
+            }
+            
+            const musicMap = new Map();
+            for (const detail of gameData.userMusicDetailList) {
+                if (detail.musicId !== undefined && detail.level !== undefined) {
+                    musicMap.set(`${detail.musicId},${detail.level}`, detail);
+                }
+            }
+            
+            log("  > 读取成功，开始智能合并...");
+
+            let updatedRecords = 0, addedRecords = 0;
+            const shouldMergeFcChain = mergeFcChainCheckbox.checked;
+            
+            for (const [recordKey, bestData] of bestCsvScores.entries()) {
+                const [musicId, levelIndex] = recordKey.split(',').map(Number);
+                const { score, rank, lampId, fcChainId } = bestData;
+                let { ajBool, fcBool } = bestData;
+                
+                if (ajBool) fcBool = true;
+
+                if (musicMap.has(recordKey)) {
+                    const sd = musicMap.get(recordKey);
+                    let hasUpdate = false;
+                    if (score > (sd.scoreMax || 0)) {
+                        sd.scoreMax = score;
+                        sd.scoreRank = RANK_MAP[rank.toLowerCase()] !== undefined ? RANK_MAP[rank.toLowerCase()] : (sd.scoreRank || 0);
+                        hasUpdate = true;
+                    }
+                    if (lampId > (sd.isSuccess || 0)) { sd.isSuccess = lampId; hasUpdate = true; }
+                    if (fcBool && !sd.isFullCombo) { sd.isFullCombo = true; sd.missCount = 0; hasUpdate = true; }
+                    if (ajBool && !sd.isAllJustice) { sd.isAllJustice = true; sd.isFullCombo = true; sd.missCount = 0; hasUpdate = true; }
+                    if (shouldMergeFcChain && fcChainId > (sd.fullChain || 0)) { sd.fullChain = fcChainId; hasUpdate = true; }
+                    if (hasUpdate) { updatedRecords++; sd.playCount = (sd.playCount || 0) + 1; }
+                } else {
+                    const finalFcChainId = shouldMergeFcChain ? fcChainId : 0;
+                    const entry = {
+                        musicId: musicId, level: levelIndex, playCount: 1,
+                        scoreMax: score,
+                        scoreRank: RANK_MAP[rank.toLowerCase()] || 0,
+                        isFullCombo: fcBool, isAllJustice: ajBool,
+                        isSuccess: lampId, ext1: 0,
+                        fullChain: finalFcChainId,
+                        maxComboCount: 0, maxChain: 0, isLock: false, theoryCount: 0
+                    };
+                    if (fcBool) entry.missCount = 0;
+                    gameData.userMusicDetailList.push(entry);
+                    addedRecords++;
+                }
+            }
+            
+            log("\n步骤 3: 正在生成最终合并后的存档文件...");
+            try {
+                const finalJson = JSON.stringify(gameData, null, 2);
+                const blob = new Blob([finalJson], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = outputFileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                log(`  > 错误: 生成 JSON 文件失败: ${e.message}`);
+                mergeButton.disabled = false;
+                return;
+            }
+
+            log("\n--- 合并完成 ---");
+            log(`成功添加了 ${addedRecords} 条新成绩。`);
+            log(`更新了 ${updatedRecords} 条已有成绩中的最佳记录。`);
+            log(`\n成功生成最终存档文件: '${outputFileName}'`);
+            alert(`合并成功！\n新文件已保存为:\n${outputFileName}`);
+            mergeButton.disabled = false;
+        }
+
+    </script>
+</body>
+</html>
