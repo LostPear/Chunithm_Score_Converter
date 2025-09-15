@@ -1,23 +1,193 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html>
 <head>
-	<meta charset="UTF-8">
-	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Chunithm Score Converter</title>
+  <meta charset="utf-8">
+  <title>CHUNITHM Score Merger (纯前端)</title>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
 </head>
 <body>
+  <h2>CHUNITHM 分数合并工具（纯前端运行）</h2>
 
-    <div>
-  <label for="image_uploads">请选择从查分器导出的分数列表csv文件：</label>
-  <input type="file" id="" name="image_uploads" accept=".csv>
-</div>
-<div>
-  <label for="image_uploads">请选择导出的json存档文件：</label>
-  <input type="file" id="image_uploads" name="image_uploads" accept=".json">
-</div>
+  <label>选择 CSV 文件：</label>
+  <input type="file" id="csvFile" accept=".csv"><br><br>
 
+  <label>选择 JSON 文件：</label>
+  <input type="file" id="jsonFile" accept=".json"><br><br>
 
-    
+  <fieldset>
+    <legend>版本兼容模式</legend>
+    <label><input type="radio" name="mode" value="lmn" checked> LUMINOUS → VERSE</label><br>
+    <label><input type="radio" name="mode" value="verse"> VERSE → VERSE</label>
+  </fieldset>
+  <br>
+
+  <label><input type="checkbox" id="mergeFC" checked> 启用 Full Chain 合并</label><br><br>
+
+  <button id="runBtn">开始转换</button>
+
+  <p id="status"></p>
+
+  <script>
+    async function main() {
+      const pyodide = await loadPyodide();
+      document.getElementById("status").textContent = "Python 环境加载完成";
+
+      document.getElementById("runBtn").addEventListener("click", async () => {
+        const csvFile = document.getElementById("csvFile").files[0];
+        const jsonFile = document.getElementById("jsonFile").files[0];
+
+        if (!csvFile || !jsonFile) {
+          alert("请先选择 CSV 和 JSON 文件");
+          return;
+        }
+
+        const csvText = await csvFile.text();
+        const jsonText = await jsonFile.text();
+
+        // 读取前端选项
+        const mode = document.querySelector('input[name="mode"]:checked').value;
+        const luminousMode = (mode === "lmn");
+        const mergeFC = document.getElementById("mergeFC").checked;
+
+        pyodide.globals.set("csv_content", csvText);
+        pyodide.globals.set("json_content", jsonText);
+        pyodide.globals.set("LUMINOUS_CSV_MODE", luminousMode);
+        pyodide.globals.set("MERGE_FULL_CHAIN", mergeFC);
+
+        const result = await pyodide.runPythonAsync(`
+import json, io, csv
+
+# === 数据映射表 ===
+RANK_MAP = {
+    'd': 0, 'c': 1, 'b': 2, 'bb': 3, 'bbb': 4, 'a': 5, 'aa': 6, 'aaa': 7,
+    's': 8, 'sp': 9, 'ss': 10, 'ssp': 11, 'sss': 12, 'sssp': 13
+}
+FULL_CHAIN_MAP = {
+    "fullchain": 1, "fullchain1": 1, "fullchain2": 2, "fullchain3": 3, "fullchain4": 4
+}
+LAMP_MAP_LMN_TO_VERSE = {
+    'failed': 0, 'clear': 1, 'hard': 2, 'absolute': 3, 'absolutep': 4, 'catastrophy': 6
+}
+LAMP_MAP_VERSE_TO_VERSE = {
+    'failed': 0, 'clear': 1, 'hard': 2, 'brave': 3, 'absolute': 4, 'catastrophy': 6
+}
+
+def preprocess_csv(csv_text, lamp_map):
+    best_scores = {}
+    reader = csv.DictReader(io.StringIO(csv_text))
+    for row in reader:
+        try:
+            music_id = int(row['id'])
+            level_index = int(row['level_index'])
+            record_key = (music_id, level_index)
+
+            current_score = int(row['score'])
+            current_rank = row.get('rank', '').strip()
+
+            fc_col_str = row.get('full_combo', '').strip().lower()
+            current_aj_bool = 'alljustice' in fc_col_str
+            current_fc_bool = bool(fc_col_str)
+
+            lamp_text = row.get('clear', '').strip().lower()
+            current_lamp_id = lamp_map.get(lamp_text, 0)
+
+            current_fc_chain_id = 0
+            if MERGE_FULL_CHAIN:
+                current_fc_chain_id = FULL_CHAIN_MAP.get(row.get('full_chain', '').strip().lower(), 0)
+
+            if record_key not in best_scores:
+                best_scores[record_key] = {
+                    'score': current_score, 'rank': current_rank,
+                    'aj_bool': current_aj_bool, 'fc_bool': current_fc_bool,
+                    'lamp_id': current_lamp_id, 'fc_chain_id': current_fc_chain_id
+                }
+            else:
+                entry = best_scores[record_key]
+                if current_score > entry['score']:
+                    entry['score'] = current_score
+                    entry['rank'] = current_rank
+                if current_aj_bool: entry['aj_bool'] = True
+                if current_fc_bool: entry['fc_bool'] = True
+                if current_lamp_id > entry['lamp_id']:
+                    entry['lamp_id'] = current_lamp_id
+                if MERGE_FULL_CHAIN and current_fc_chain_id > entry['fc_chain_id']:
+                    entry['fc_chain_id'] = current_fc_chain_id
+        except:
+            continue
+    return best_scores
+
+def merge(csv_text, json_text):
+    lamp_map = LAMP_MAP_LMN_TO_VERSE if LUMINOUS_CSV_MODE else LAMP_MAP_VERSE_TO_VERSE
+    best_csv_scores = preprocess_csv(csv_text, lamp_map)
+    game_data = json.loads(json_text)
+
+    if 'userMusicDetailList' not in game_data:
+        raise Exception("JSON 中缺少 'userMusicDetailList'")
+
+    music_list = game_data['userMusicDetailList']
+    music_map = {(item['musicId'], item['level']): item for item in music_list}
+
+    for record_key, best_data in best_csv_scores.items():
+        music_id, level_index = record_key
+        score = best_data['score']
+        rank_str = best_data['rank']
+        aj_bool = best_data['aj_bool']
+        fc_bool = best_data['fc_bool']
+        lamp_id = best_data['lamp_id']
+        fc_chain_id = best_data['fc_chain_id']
+
+        if aj_bool: fc_bool = True
+
+        if record_key in music_map:
+            score_detail = music_map[record_key]
+            if score > score_detail.get('scoreMax', 0):
+                score_detail['scoreMax'] = score
+                score_detail['scoreRank'] = RANK_MAP.get(rank_str.lower(), score_detail.get('scoreRank', 0))
+            if lamp_id > score_detail.get('isSuccess', 0):
+                score_detail['isSuccess'] = lamp_id
+            if fc_bool and not score_detail.get('isFullCombo', False):
+                score_detail['isFullCombo'] = True
+                score_detail['missCount'] = 0
+            if aj_bool and not score_detail.get('isAllJustice', False):
+                score_detail['isAllJustice'] = True
+                score_detail['isFullCombo'] = True
+                score_detail['missCount'] = 0
+            if MERGE_FULL_CHAIN and fc_chain_id > score_detail.get('fullChain', 0):
+                score_detail['fullChain'] = fc_chain_id
+            score_detail['playCount'] = score_detail.get('playCount', 0) + 1
+        else:
+            miss_count = 0 if fc_bool else -1
+            final_fc_chain_id = fc_chain_id if MERGE_FULL_CHAIN else 0
+            entry = {
+                "musicId": music_id, "level": level_index, "playCount": 1,
+                "scoreMax": score,
+                "scoreRank": RANK_MAP.get(rank_str.lower(), 0),
+                "isFullCombo": fc_bool, "isAllJustice": aj_bool,
+                "isSuccess": lamp_id,
+                "fullChain": final_fc_chain_id, "ext1": 0,
+                "maxComboCount": 0, "maxChain": 0, "isLock": False, "theoryCount": 0
+            }
+            if miss_count != -1:
+                entry["missCount"] = miss_count
+            game_data['userMusicDetailList'].append(entry)
+
+    return json.dumps(game_data, ensure_ascii=False, indent=2)
+
+merge(csv_content, json_content)
+        `);
+
+        // 下载结果
+        const blob = new Blob([result], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "merged.json";
+        a.click();
+
+        document.getElementById("status").textContent = "转换完成，已下载 merged.json";
+      });
+    }
+    main();
+  </script>
 </body>
 </html>
