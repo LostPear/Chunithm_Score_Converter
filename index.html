@@ -14,14 +14,17 @@
   <label>选择 JSON 文件：</label>
   <input type="file" id="jsonFile" accept=".json"><br><br>
 
-  <fieldset>
-    <legend>版本兼容模式</legend>
-    <label><input type="radio" name="mode" value="lmn" checked> LUMINOUS → VERSE</label><br>
-    <label><input type="radio" name="mode" value="verse"> VERSE → VERSE</label>
-  </fieldset>
-  <br>
+  <label>
+    <input type="checkbox" id="modeSwitch" checked>
+    使用 LUMINOUS → VERSE 模式（不勾选则为 VERSE → VERSE）
+  </label>
+  <br><br>
 
-  <label><input type="checkbox" id="mergeFC" checked> 启用 Full Chain 合并</label><br><br>
+  <label>
+    <input type="checkbox" id="mergeFC" checked>
+    启用 Full Chain 合并
+  </label>
+  <br><br>
 
   <button id="runBtn">开始转换</button>
 
@@ -30,7 +33,6 @@
   <script>
     async function main() {
       const pyodide = await loadPyodide();
-      document.getElementById("status").textContent = "Python 环境加载完成";
 
       document.getElementById("runBtn").addEventListener("click", async () => {
         const csvFile = document.getElementById("csvFile").files[0];
@@ -45,8 +47,7 @@
         const jsonText = await jsonFile.text();
 
         // 读取前端选项
-        const mode = document.querySelector('input[name="mode"]:checked').value;
-        const luminousMode = (mode === "lmn");
+        const luminousMode = document.getElementById("modeSwitch").checked;
         const mergeFC = document.getElementById("mergeFC").checked;
 
         pyodide.globals.set("csv_content", csvText);
